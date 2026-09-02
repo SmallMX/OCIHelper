@@ -1,0 +1,383 @@
+"use strict";
+
+(() => {
+  const DEFAULT_LANGUAGE = "zh-CN";
+  const LANGUAGE_STORAGE_KEY = "oci-helper-language";
+  const SUPPORTED_LANGUAGES = new Set([DEFAULT_LANGUAGE, "en"]);
+
+  const englishMessages = {
+    "登录 OCI Helper": "Sign in to OCI Helper",
+    "进入你的基础设施管理工作区": "Access your infrastructure management workspace",
+    "账号": "Account",
+    "密码": "Password",
+    "登录": "Sign in",
+    "私有、自托管的 OCI 资源控制台": "A private, self-hosted OCI resource console",
+    "工作区": "Workspace",
+    "主导航": "Main navigation",
+    "概览": "Overview",
+    "OCI 配置": "OCI configurations",
+    "任务列表": "Tasks",
+    "执行日志": "Execution logs",
+    "网络与存储": "Network & storage",
+    "系统设置": "System settings",
+    "当前版本": "Current version",
+    "切换主题": "Toggle theme",
+    "切换明暗主题": "Toggle light/dark theme",
+    "退出登录": "Sign out",
+    "管理面板": "Admin console",
+    "查看 OCI 配置、任务和区域的运行概况。": "View the status of OCI configurations, tasks, and regions.",
+    "管理 OCI API 凭据、实例与创建策略。": "Manage OCI API credentials, instances, and provisioning policies.",
+    "创建、添加和命名开机任务使用的 SSH 公钥。": "Create, import, and name SSH public keys used by provisioning tasks.",
+    "跟踪实例创建任务的状态、重试与错误。": "Track instance provisioning status, retries, and errors.",
+    "查看最新的任务调度、执行结果与错误日志。": "Review recent task scheduling, results, and error logs.",
+    "集中管理网络、安全规则、引导卷和服务限额。": "Manage networks, security rules, boot volumes, and service limits.",
+    "管理管理员账号、登录密码与通知渠道。": "Manage the administrator account, password, and notification channels.",
+    "已连接": "Connected",
+    "关闭": "Close",
+    "取消": "Cancel",
+    "确认": "Confirm",
+    "切换到英文": "Switch to English",
+    "切换到中文": "Switch to Chinese",
+    "处理中…": "Processing…",
+    "暂无数据": "No data",
+    "服务器返回了无法解析的响应 ({status})": "The server returned an unreadable response ({status})",
+    "登录已过期": "Your session has expired",
+    "登录状态已失效，请重新登录": "Your session is no longer valid. Sign in again.",
+    "认证令牌无效或已过期": "The authentication token is invalid or expired",
+    "未提供认证令牌": "No authentication token was provided",
+    "请求失败 ({status})": "Request failed ({status})",
+    "请求参数校验失败": "Request validation failed",
+    "服务器内部错误": "Internal server error",
+    "：{details}": ": {details}",
+    "；": "; ",
+    "服务器未返回下载文件": "The server did not return a download file",
+    "下载文件为空": "The downloaded file is empty",
+    "正在加载…": "Loading…",
+    "暂无可用选项": "No options available",
+    "活动任务": "Active tasks",
+    "覆盖区域": "Regions covered",
+    "运行天数": "Days running",
+    "使用提示": "Getting started",
+    "先添加 OCI API 配置，再创建实例任务。终止实例或引导卷、删除 VCN 都需要 Telegram 验证码；VCN 级联删除仅允许本工具创建且未混入外部资源的网络。": "Add an OCI API configuration before creating an instance task. Terminating instances or boot volumes and deleting VCNs require a Telegram verification code. Cascading VCN deletion is limited to networks created by this tool that contain no external resources.",
+    "添加配置": "Add configuration",
+    "刷新": "Refresh",
+    "OCI API 配置": "OCI API configurations",
+    "名称": "Name",
+    "区域": "Region",
+    "创建时间": "Created",
+    "状态": "Status",
+    "操作": "Actions",
+    "任务运行中": "Task running",
+    "可用": "Available",
+    "实例": "Instances",
+    "创建任务": "Create task",
+    "重命名": "Rename",
+    "删除": "Delete",
+    "添加 OCI 配置": "Add OCI configuration",
+    "配置名称": "Configuration name",
+    "OCI config 内容": "OCI config contents",
+    "PEM 私钥": "PEM private key",
+    "验证并保存": "Validate and save",
+    "配置会先调用 OCI API 验证；私钥以 0600 权限保存。config 中的 key_file 不会被直接采用。 ": "The configuration is validated through the OCI API first. The private key is saved with 0600 permissions, and key_file from the config is ignored.",
+    "OCI 配置已添加": "OCI configuration added",
+    "重命名配置": "Rename configuration",
+    "新名称": "New name",
+    "名称已更新": "Name updated",
+    "删除 OCI 配置": "Delete OCI configuration",
+    "确定删除「{name}」吗？活动任务会被取消，托管私钥会被删除。": "Delete “{name}”? Active tasks will be cancelled and the managed private key will be removed.",
+    "配置已删除": "Configuration deleted",
+    "SSH 公钥管理": "SSH public key management",
+    "生成密钥对": "Generate key pair",
+    "正在生成…": "Generating…",
+    "添加公钥": "Add public key",
+    "这里只保存公钥。生成密钥对时，私钥仅在本次下载中提供，请妥善保管。": "Only public keys are stored here. When a key pair is generated, the private key is provided in this download only; keep it safe.",
+    "指纹": "Fingerprint",
+    "添加 SSH 公钥": "Add SSH public key",
+    "公钥名称": "Public key name",
+    "每条记录只保存一把 OpenSSH 公钥。": "Each record stores exactly one OpenSSH public key.",
+    "添加": "Add",
+    "SSH 公钥已添加": "SSH public key added",
+    "重命名 SSH 公钥": "Rename SSH public key",
+    "SSH 公钥名称已更新": "SSH public key name updated",
+    "生成 SSH 密钥对": "Generate SSH key pair",
+    "生成并下载": "Generate and download",
+    "将生成 Ed25519 密钥对。公钥会自动保存，私钥不会在服务器上留存；下载 ZIP 后请立即备份。": "An Ed25519 key pair will be generated. The public key is saved automatically, while the private key is never retained on the server. Back up the ZIP immediately after downloading it.",
+    "密钥对已生成并开始下载": "Key pair generated and download started",
+    "SSH 公钥不存在": "The SSH public key does not exist",
+    "SSH 公钥名称已存在": "An SSH public key with this name already exists",
+    "SSH 公钥已存在": "This SSH public key already exists",
+    "SSH 公钥名称或内容已存在": "An SSH public key with this name or content already exists",
+    "自动轮换（推荐）": "Automatic rotation (recommended)",
+    "当前区域没有适用于 {architecture} 的 Linux 镜像": "No Linux image is available for {architecture} in this region",
+    "当前区域没有支持 {architecture} 的可用域": "No availability domain in this region supports {architecture}",
+    "创建实例任务 · {name}": "Create instance task · {name}",
+    "实例名称": "Instance name",
+    "例如 web-server": "For example, web-server",
+    "留空时自动生成；批量创建时会自动追加 -001、-002 等序号。": "Leave blank to generate a name automatically. Batch provisioning appends suffixes such as -001 and -002.",
+    "架构 / Shape": "Architecture / Shape",
+    "正在查询可用镜像…": "Loading available images…",
+    "正在查询可用域…": "Loading availability domains…",
+    "镜像加载失败，请重新选择 Shape 重试": "Image loading failed. Select the Shape again to retry.",
+    "可用域加载失败，请重新选择 Shape 重试": "Availability domain loading failed. Select the Shape again to retry.",
+    "当前 Shape 没有可用 Linux 镜像": "No Linux image is available for this Shape",
+    "当前 Shape 没有支持的可用域": "No availability domain supports this Shape",
+    "当前区域和 Shape 没有可用的 Linux 镜像": "No Linux image is available for this region and Shape",
+    "当前区域没有支持所选 Shape 的可用域": "No availability domain in this region supports the selected Shape",
+    "内存（GB）": "Memory (GB)",
+    "引导卷（GB）": "Boot volume (GB)",
+    "引导卷性能（VPU/GB）": "Boot volume performance (VPU/GB)",
+    "操作系统": "Operating system",
+    "选项来自当前 OCI 区域中与所选 Shape 兼容的 AVAILABLE Linux 镜像。": "Options are AVAILABLE Linux images in the current OCI region that are compatible with the selected Shape.",
+    "可用域": "Availability domain",
+    "选项来自当前 OCI 区域；选择自动轮换时，会在支持当前 Shape 的可用域之间轮换重试。": "Options come from the current OCI region. Automatic rotation retries across availability domains that support the selected Shape.",
+    "添加新公钥…": "Add a new public key…",
+    "可选择已保存的公钥，也可添加一把新公钥。": "Select a saved public key or add a new one.",
+    "新公钥名称": "New public key name",
+    "新 SSH 公钥": "New SSH public key",
+    "新公钥会自动保存到公钥列表；Ubuntu 默认用户为 ubuntu，Oracle Linux/CentOS 默认用户为 opc。": "The new public key is saved automatically. The default user is ubuntu for Ubuntu and opc for Oracle Linux/CentOS.",
+    "所选 SSH 公钥不存在，请刷新后重试": "The selected SSH public key no longer exists. Refresh and try again.",
+    "创建数量": "Quantity",
+    "最短创建间隔（秒）": "Minimum provisioning interval (seconds)",
+    "最长创建间隔（秒）": "Maximum provisioning interval (seconds)",
+    "每次创建或重试后，会在最短与最长间隔之间随机等待。": "After each provisioning attempt or retry, the task waits for a random duration within this range.",
+    "最大尝试次数": "Maximum attempts",
+    "按实际调用 OCI 创建接口的次数统计；0 表示不限次数。": "Counts actual calls to the OCI provisioning API. Set to 0 for unlimited attempts.",
+    "SSH 公钥": "SSH public key",
+    "填写 OpenSSH 公钥；Ubuntu 默认用户为 ubuntu，Oracle Linux/CentOS 默认用户为 opc。": "Enter an OpenSSH public key. The default user is ubuntu for Ubuntu and opc for Oracle Linux/CentOS.",
+    "提交任务": "Submit task",
+    "实例仅启用 SSH Key 登录；可固定可用域，也可自动轮换，并使用随机创建间隔。": "Instances use SSH key authentication only. You can select a fixed availability domain or rotate automatically with randomized provisioning intervals.",
+    "创建任务已提交": "Provisioning task submitted",
+    "正在读取 OCI 资源…": "Loading OCI resources…",
+    "返回": "Back",
+    "放行全部安全规则": "Allow all security rules",
+    "放行安全规则": "Allow security rules",
+    "这会把该配置下所有 VCN 的默认安全列表改为允许全部 IPv4/IPv6 流量。确认继续？": "This changes the default security lists of every VCN in this configuration to allow all IPv4/IPv6 traffic. Continue?",
+    "放行": "Allow",
+    "安全列表已更新": "Security lists updated",
+    "当前配置没有活动实例": "This configuration has no active instances",
+    "配置": "Configuration",
+    "公网 IP": "Public IP",
+    "更换 IP": "Change IP",
+    "改配置": "Resize",
+    "改名称": "Rename",
+    "流量": "Traffic",
+    "控制台连接": "Console connection",
+    "终止": "Terminate",
+    "实例操作": "Instance action",
+    "确定对「{name}」执行 {action}？": "Run {action} on “{name}”?",
+    "操作已提交": "Action submitted",
+    "该实例没有可用 VNIC": "This instance has no available VNIC",
+    "更换公网 IP": "Change public IP",
+    "目标 CIDR（可选，一行一个）": "Target CIDRs (optional, one per line)",
+    "未填写 CIDR 时只更换一次；填写后会重试到匹配或达到最大次数。 ": "Without a CIDR, the public IP is changed once. With CIDRs, the task retries until it finds a match or reaches the attempt limit.",
+    "换 IP 任务已提交": "IP change task submitted",
+    "调整实例配置": "Resize instance",
+    "更新": "Update",
+    "仅 Flex Shape 支持直接调整 OCPU 和内存。 ": "Only Flex Shapes support direct OCPU and memory changes.",
+    "实例配置更新已提交": "Instance configuration update submitted",
+    "修改实例名称": "Rename instance",
+    "实例名称已更新": "Instance name updated",
+    "创建 IPv6": "Create IPv6",
+    "将为该实例主 VNIC 创建 IPv6 地址。确认继续？": "Create an IPv6 address for the instance's primary VNIC?",
+    "IPv6 已创建：{address}": "IPv6 created: {address}",
+    "创建控制台连接": "Create console connection",
+    "请使用本机 RSA 密钥对的 OpenSSH 公钥；连接时需要对应私钥。私钥不会上传。": "Use the OpenSSH public key from a local RSA key pair. The matching private key is required to connect and is never uploaded.",
+    "创建": "Create",
+    "OCI 控制台连接仅用于故障排查。已有活动连接时，请先在 OCI 控制台中删除旧连接。": "OCI console connections are intended for troubleshooting. Delete any existing active connection in the OCI Console first.",
+    "控制台连接命令": "Console connection command",
+    "OCI 未返回连接命令": "OCI did not return a connection command",
+    "最近一小时流量 · {name}": "Traffic in the last hour · {name}",
+    "返回实例": "Back to instances",
+    "时间": "Time",
+    "入站 MB": "Inbound MB",
+    "出站 MB": "Outbound MB",
+    "终止实例": "Terminate instance",
+    "实例终止后无法恢复。验证码会发送至已配置的 Telegram。": "A terminated instance cannot be recovered. A verification code will be sent to the configured Telegram chat.",
+    "发送验证码": "Send verification code",
+    "输入终止验证码": "Enter termination verification code",
+    "6 位验证码": "6-digit verification code",
+    "保留引导卷": "Preserve boot volume",
+    "终止命令已提交": "Termination command submitted",
+    "区域 / 可用域": "Region / availability domain",
+    "规格": "Shape",
+    "剩余": "Remaining",
+    "尝试": "Attempts",
+    "间隔 / 上限": "Interval / limit",
+    "错误": "Error",
+    "自动轮换": "Automatic rotation",
+    "不限": "Unlimited",
+    "{count} 次": "{count} attempts",
+    "自动生成": "Generated automatically",
+    "{min}–{max} 秒 · {limit}": "{min}–{max} seconds · {limit}",
+    "恢复": "Resume",
+    "暂停": "Pause",
+    "停止": "Stop",
+    "显示日志行数": "Number of log lines",
+    "最新 {count} 行": "Latest {count} lines",
+    "任务执行日志": "Task execution logs",
+    "正在刷新…": "Refreshing…",
+    "最后写入：{updatedAt} · 显示 {lineTotal} 行{truncated}": "Last updated: {updatedAt} · Showing {lineTotal} lines{truncated}",
+    " · 已截取最新内容": " · Latest content only",
+    "日志文件尚未生成；任务开始执行后可在此查看。": "The log file has not been created yet. It will appear here after a task starts.",
+    "暂无任务执行日志。": "No task execution logs.",
+    "任务执行日志内容": "Task execution log contents",
+    "任务状态已更新": "Task status updated",
+    "停止任务": "Stop task",
+    "确定停止任务 {id}？": "Stop task {id}?",
+    "任务已停止": "Task stopped",
+    "请先添加 OCI 配置": "Add an OCI configuration first",
+    "资源配置": "Resources",
+    "引导卷": "Boot volumes",
+    "服务限额": "Service limits",
+    "租户信息": "Tenancy information",
+    "选择上方资源类型开始查询。所有 OCI SDK 调用均在工作线程执行，不阻塞 API 事件循环。": "Select a resource type above to start. All OCI SDK calls run in worker threads and do not block the API event loop.",
+    "租户": "Tenancy",
+    "主区域": "Home region",
+    "订阅区域": "Subscribed regions",
+    "可见性": "Visibility",
+    "安全规则": "Security rules",
+    "删除 VCN": "Delete VCN",
+    "仅空 VCN 或完全由本工具创建且未混入外部资源的网络可被删除。确认继续？": "Only empty VCNs, or networks created entirely by this tool with no external resources, can be deleted. Continue?",
+    "VCN 已删除": "VCN deleted",
+    "安全规则 · {name}": "Security rules · {name}",
+    "返回 VCN": "Back to VCNs",
+    "查看出站": "View egress",
+    "查看入站": "View ingress",
+    "添加规则": "Add rule",
+    "协议": "Protocol",
+    "来源 / 目标": "Source / destination",
+    "源端口": "Source port",
+    "目标端口": "Destination port",
+    "说明": "Description",
+    "添加入站规则": "Add ingress rule",
+    "添加出站规则": "Add egress rule",
+    "全部": "All",
+    "来源 CIDR": "Source CIDR",
+    "目标 CIDR": "Destination CIDR",
+    "源端口（可选）": "Source port (optional)",
+    "目标端口（可选）": "Destination port (optional)",
+    "说明（可选）": "Description (optional)",
+    "无状态规则": "Stateless rule",
+    "安全规则已添加": "Security rule added",
+    "删除安全规则": "Delete security rule",
+    "确定删除这条规则？": "Delete this rule?",
+    "安全规则已删除": "Security rule deleted",
+    "容量": "Capacity",
+    "挂载": "Attached",
+    "是": "Yes",
+    "否": "No",
+    "调整": "Modify",
+    "调整引导卷": "Modify boot volume",
+    "容量（GB，只能增加）": "Capacity (GB, increases only)",
+    "支持 10（均衡）、20（高性能）或 30 至 120（超高性能）。": "Supported values are 10 (balanced), 20 (higher performance), or 30–120 (ultra high performance).",
+    "引导卷 VPU/GB 只能是 10、20 或 30 至 120": "Boot volume VPU/GB must be 10, 20, or between 30 and 120",
+    "引导卷配置已更新": "Boot volume configuration updated",
+    "终止引导卷": "Terminate boot volume",
+    "引导卷数据将永久删除。确认继续？": "Boot volume data will be permanently deleted. Continue?",
+    "引导卷终止命令已提交": "Boot volume termination submitted",
+    "Telegram 验证码": "Telegram verification code",
+    "验证": "Verify",
+    "验证码已发送到已配置的 Telegram 会话，5 分钟内有效。": "A verification code was sent to the configured Telegram chat and is valid for 5 minutes.",
+    "全部服务": "All services",
+    "查询": "Query",
+    "服务": "Service",
+    "限额": "Limit",
+    "范围": "Scope",
+    "上限": "Limit",
+    "已用": "Used",
+    "选择服务后查询可减少 OCI Limits API 调用数量。": "Select a service before querying to reduce OCI Limits API calls.",
+    "管理员账号": "Administrator account",
+    "管理员用户名": "Administrator username",
+    "当前密码": "Current password",
+    "新密码（可选）": "New password (optional)",
+    "确认新密码": "Confirm new password",
+    "保存管理员账号": "Save administrator account",
+    "管理员用户名不能为空": "Administrator username is required",
+    "新密码至少需要 12 个字符": "The new password must contain at least 12 characters",
+    "新密码不能使用常见默认密码": "The new password cannot be a common default password",
+    "两次输入的新密码不一致": "The new passwords do not match",
+    "请修改管理员用户名或填写新密码": "Change the administrator username or enter a new password",
+    "管理员账号已更新，请使用新凭据重新登录。": "Administrator account updated. Sign in again with the new credentials.",
+    "修改前需要验证当前密码。新密码至少 12 个字符；留空时仅修改用户名。保存后所有已登录会话都会失效。": "Your current password is required. New passwords must contain at least 12 characters; leave it blank to change only the username. Saving invalidates all active sessions.",
+    "Telegram 通知": "Telegram notifications",
+    "已配置；修改时请重新输入": "Configured; enter it again to make changes",
+    "请输入 Bot Token": "Enter the Bot Token",
+    "发送测试消息": "Send test message",
+    "发送 Telegram 测试消息": "Send Telegram test message",
+    "消息": "Message",
+    "OCI Helper 通知测试": "OCI Helper notification test",
+    "发送": "Send",
+    "测试消息已发送": "Test message sent",
+    "Telegram 配置已保存": "Telegram configuration saved",
+    "出于安全考虑，已保存的 Token 不会回传。保存前会调用 Telegram getMe 验证配置；修改时请重新输入 Token 和 Chat ID，清空两个字段可停用通知。": "Saved tokens are never returned. Telegram getMe validates the configuration before it is saved. Enter both the Token and Chat ID again to make changes, or clear both fields to disable notifications."
+  };
+
+  function getInitialLanguage() {
+    const storedLanguage = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+    return SUPPORTED_LANGUAGES.has(storedLanguage) ? storedLanguage : DEFAULT_LANGUAGE;
+  }
+
+  let currentLanguage = getInitialLanguage();
+
+  function interpolate(message, values = {}) {
+    return message.replace(/\{([A-Za-z][A-Za-z0-9]*)\}/g, (match, name) => (
+      Object.hasOwn(values, name) ? String(values[name]) : match
+    ));
+  }
+
+  function t(message, values = {}) {
+    const localizedMessage = currentLanguage === "en"
+      ? englishMessages[message] || message
+      : message;
+    return interpolate(localizedMessage, values);
+  }
+
+  function applyDocumentTranslations(root = document) {
+    document.documentElement.lang = currentLanguage;
+    root.querySelectorAll("[data-i18n]").forEach((item) => {
+      item.textContent = t(item.dataset.i18n);
+    });
+    for (const attribute of ["aria-label", "title"]) {
+      const dataAttribute = `i18n${attribute.split("-").map((part) => part[0].toUpperCase() + part.slice(1)).join("")}`;
+      root.querySelectorAll(`[data-${dataAttribute.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}]`).forEach((item) => {
+        item.setAttribute(attribute, t(item.dataset[dataAttribute]));
+      });
+    }
+
+    const shouldSwitchToEnglish = currentLanguage === DEFAULT_LANGUAGE;
+    root.querySelectorAll("[data-language-toggle]").forEach((item) => {
+      const label = item.querySelector("[data-language-label]");
+      if (label) label.textContent = shouldSwitchToEnglish ? "English" : "中文";
+      const accessibleLabel = t(shouldSwitchToEnglish ? "切换到英文" : "切换到中文");
+      item.title = accessibleLabel;
+      item.setAttribute("aria-label", accessibleLabel);
+    });
+  }
+
+  function setLanguage(language) {
+    const normalizedLanguage = SUPPORTED_LANGUAGES.has(language) ? language : DEFAULT_LANGUAGE;
+    if (normalizedLanguage === currentLanguage) return;
+    currentLanguage = normalizedLanguage;
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, currentLanguage);
+    applyDocumentTranslations();
+    window.dispatchEvent(new CustomEvent("oci-helper:languagechange", {
+      detail: { language: currentLanguage },
+    }));
+  }
+
+  function toggleLanguage() {
+    setLanguage(currentLanguage === DEFAULT_LANGUAGE ? "en" : DEFAULT_LANGUAGE);
+  }
+
+  window.OCIHelperI18n = {
+    applyDocumentTranslations,
+    getLanguage: () => currentLanguage,
+    setLanguage,
+    t,
+  };
+
+  document.addEventListener("click", (event) => {
+    if (event.target.closest("[data-language-toggle]")) toggleLanguage();
+  });
+  applyDocumentTranslations();
+})();

@@ -1,0 +1,136 @@
+# =============================================================================
+# OCI Helper (Python) - Git 忽略规则
+# =============================================================================
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.ruff_cache/
+.pytest_cache/
+.coverage
+coverage.xml
+htmlcov/
+# dist/  (前端 Web UI 在 oci_helper/dist/ 中，需要纳入版本控制)
+build/
+*.egg
+
+# ---- 虚拟环境 ----
+venv/
+.venv/
+env/
+
+# ---- IDE ----
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.history/
+.gemini/
+.codex/
+.claude/
+.agents/
+.direnv/
+.envrc
+.gitconfig
+.git-credentials
+.netrc
+.npmrc
+.pypirc
+.docker/config.json
+.config/gh/
+.config/gcloud/
+.ssh/
+.gnupg/
+.zsh_history
+.bash_history
+.python_history
+
+# ---- 运行时数据 ----
+data/
+keys/
+logs/
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+*.log
+.oci-helper-secret
+.oci-helper-data-key
+.oci/
+.aws/
+.azure/
+.kube/
+kubeconfig*
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfvars.json
+secrets/
+credentials/
+credentials.json
+credentials.yml
+credentials.yaml
+secrets.json
+secrets.yml
+secrets.yaml
+secrets*.json
+secrets*.yml
+secrets*.yaml
+credentials*.json
+credentials*.yml
+credentials*.yaml
+service-account*.json
+docker-compose.override.yml
+docker-compose.override.yaml
+compose.override.yml
+compose.override.yaml
+
+# ---- 密钥与证书容器 ----
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+*.ovpn
+*.kdbx
+
+# ---- 环境变量 ----
+.env
+.env.*
+!.env.example
+
+# ---- 备份文件 ----
+*.zip
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.dump
+*.dmp
+*.crash
+*.ips
+*.out
+*.log.*
+*.tar.gz
+*.tgz
+*.7z
+*.rar
+*.gpg
+*.age
+
+# ---- 操作系统 ----
+.DS_Store
+Thumbs.db

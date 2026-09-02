@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-labelledby="logo-title">
+  <title id="logo-title">OCI Helper</title>
+  <rect x="2" y="2" width="116" height="116" rx="28" fill="#24292f" stroke="#57606a" stroke-width="4"/>
+  <path d="M35 89c-12.5 0-22-9.2-22-20.8 0-10 7.2-18.7 17.2-20.6C33 32.7 45.7 22 60.8 22c14.4 0 26.4 9.5 29.7 23.2C100.7 47.6 108 56.3 108 66.8 108 79.3 98.2 89 85 89H35Z" fill="#f0f6fc"/>
+  <path d="m44 49-11 11 11 11M54 72h27" fill="none" stroke="#24292f" stroke-linecap="round" stroke-linejoin="round" stroke-width="7"/>
+  <circle cx="86" cy="39" r="8" fill="#3fb950" stroke="#24292f" stroke-width="4"/>
+</svg>

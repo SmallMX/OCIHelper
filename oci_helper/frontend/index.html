@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#f6f8fa">
+    <title>OCI Helper</title>
+    <link rel="icon" href="/favicon.ico">
+    <link rel="stylesheet" href="/app.css">
+    <script defer src="/i18n.js"></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <section id="login-view" class="login-view">
+      <div class="login-shell">
+        <div class="login-tools">
+          <button type="button" class="login-language-toggle" data-language-toggle aria-label="切换到英文" title="切换到英文">
+            <span data-language-label>English</span>
+          </button>
+        </div>
+        <div class="login-brand" aria-label="OCI Helper">
+          <img class="brand-mark" src="/logo.svg" alt="" aria-hidden="true">
+          <strong>OCI Helper</strong>
+        </div>
+        <div class="login-heading">
+          <h1 data-i18n="登录 OCI Helper">登录 OCI Helper</h1>
+          <p data-i18n="进入你的基础设施管理工作区">进入你的基础设施管理工作区</p>
+        </div>
+        <form id="login-form" class="login-card">
+          <label><span data-i18n="账号">账号</span><input name="account" autocomplete="username" required></label>
+          <label><span data-i18n="密码">密码</span><input name="password" type="password" autocomplete="current-password" required></label>
+          <button class="primary" type="submit" data-i18n="登录">登录</button>
+          <p id="login-error" class="form-error" role="alert"></p>
+        </form>
+        <p class="login-caption" data-i18n="私有、自托管的 OCI 资源控制台">私有、自托管的 OCI 资源控制台</p>
+      </div>
+    </section>
+
+    <div id="shell" class="shell" hidden>
+      <aside class="sidebar">
+        <div class="sidebar-inner">
+          <div class="brand">
+            <img class="brand-mark small" src="/logo.svg" alt="" aria-hidden="true">
+            <span class="brand-copy"><strong>OCI Helper</strong><small>Workspace</small></span>
+            <span class="visibility-badge">Private</span>
+          </div>
+          <p class="sidebar-label" data-i18n="工作区">工作区</p>
+          <nav id="navigation" aria-label="主导航" data-i18n-aria-label="主导航">
+            <button type="button" data-view="overview" class="active" aria-label="概览" title="概览" data-i18n-aria-label="概览" data-i18n-title="概览"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><rect x="2" y="2" width="4.5" height="4.5" rx="1"/><rect x="9.5" y="2" width="4.5" height="4.5" rx="1"/><rect x="2" y="9.5" width="4.5" height="4.5" rx="1"/><rect x="9.5" y="9.5" width="4.5" height="4.5" rx="1"/></svg></span><span data-i18n="概览">概览</span></button>
+            <button type="button" data-view="configs" aria-label="OCI 配置" title="OCI 配置" data-i18n-aria-label="OCI 配置" data-i18n-title="OCI 配置"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M3 3.5h10v9H3zM5.5 1.5v4M10.5 1.5v4M3 6.5h10M5.5 9h2M5.5 11h5"/></svg></span><span data-i18n="OCI 配置">OCI 配置</span></button>
+            <button type="button" data-view="sshKeys" aria-label="SSH 公钥" title="SSH 公钥" data-i18n-aria-label="SSH 公钥" data-i18n-title="SSH 公钥"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><circle cx="5.5" cy="6" r="3.25"/><path d="m8 8.5 5.5 5.5M10.25 10.75l1.5-1.5M12 12.5l1.5-1.5"/></svg></span><span data-i18n="SSH 公钥">SSH 公钥</span></button>
+            <button type="button" data-view="tasks" aria-label="任务列表" title="任务列表" data-i18n-aria-label="任务列表" data-i18n-title="任务列表"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M5.5 3h8M5.5 8h8M5.5 13h8M2 3h.01M2 8h.01M2 13h.01"/></svg></span><span data-i18n="任务列表">任务列表</span></button>
+            <button type="button" data-view="logs" aria-label="执行日志" title="执行日志" data-i18n-aria-label="执行日志" data-i18n-title="执行日志"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><rect x="1.5" y="2" width="13" height="12" rx="1.5"/><path d="m4 6 2 2-2 2M8 10h4"/></svg></span><span data-i18n="执行日志">执行日志</span></button>
+            <button type="button" data-view="resources" aria-label="网络与存储" title="网络与存储" data-i18n-aria-label="网络与存储" data-i18n-title="网络与存储"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><ellipse cx="8" cy="3.5" rx="5.5" ry="2"/><path d="M2.5 3.5v4c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-4M2.5 7.5v4c0 1.1 2.5 2 5.5 2s5.5-.9 5.5-2v-4"/></svg></span><span data-i18n="网络与存储">网络与存储</span></button>
+            <button type="button" data-view="settings" aria-label="系统设置" title="系统设置" data-i18n-aria-label="系统设置" data-i18n-title="系统设置"><span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><circle cx="8" cy="8" r="2.25"/><path d="M6.9 1.8h2.2l.45 1.65 1.35.56 1.5-.85 1.56 1.56-.85 1.5.56 1.35 1.65.45v2.2l-1.65.45-.56 1.35.85 1.5-1.56 1.56-1.5-.85-1.35.56-.45 1.65H6.9l-.45-1.65-1.35-.56-1.5.85-1.56-1.56.85-1.5-.56-1.35-1.65-.45v-2.2l1.65-.45.56-1.35-.85-1.5L3.6 3.16l1.5.85 1.35-.56z"/></svg></span><span data-i18n="系统设置">系统设置</span></button>
+          </nav>
+          <div class="sidebar-footer">
+            <p id="app-version" class="app-version" aria-label="当前版本" data-i18n-aria-label="当前版本">v—</p>
+            <button type="button" class="ghost" data-language-toggle aria-label="切换到英文" title="切换到英文">
+              <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c1.8 1.65 2.75 3.65 2.75 6S9.8 12.35 8 14M8 2C6.2 3.65 5.25 5.65 5.25 8S6.2 12.35 8 14"/></svg></span>
+              <span data-language-label>English</span>
+            </button>
+            <button type="button" id="theme-toggle" class="ghost" title="切换主题" aria-label="切换明暗主题" data-i18n-title="切换主题" data-i18n-aria-label="切换明暗主题">
+              <span class="nav-icon" aria-hidden="true">
+                <svg class="theme-light-icon" viewBox="0 0 16 16" focusable="false"><circle cx="8" cy="8" r="3"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M12.95 3.05l-1.06 1.06M4.11 11.89l-1.06 1.06"/></svg>
+                <svg class="theme-dark-icon" viewBox="0 0 16 16" focusable="false"><path d="M13.7 10.1A6 6 0 0 1 5.9 2.3 6 6 0 1 0 13.7 10.1Z"/></svg>
+              </span>
+              <span data-i18n="切换主题">切换主题</span>
+            </button>
+            <button type="button" id="logout" class="ghost danger-text" title="退出登录" aria-label="退出登录" data-i18n-title="退出登录" data-i18n-aria-label="退出登录">
+              <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 16 16" focusable="false"><path d="M6 2.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1H6M10.5 4.5 14 8l-3.5 3.5M14 8H6"/></svg></span>
+              <span data-i18n="退出登录">退出登录</span>
+            </button>
+          </div>
+        </div>
+      </aside>
+      <main class="workspace">
+        <header class="topbar">
+          <div class="topbar-inner">
+            <div class="page-heading">
+              <p class="eyebrow"><span>OCI Helper</span><span aria-hidden="true">/</span><strong data-i18n="管理面板">管理面板</strong></p>
+              <h2 id="page-title" data-i18n="概览">概览</h2>
+              <p id="page-description" class="page-description" data-i18n="查看 OCI 配置、任务和区域的运行概况。">查看 OCI 配置、任务和区域的运行概况。</p>
+            </div>
+            <span id="connection-state" class="status-pill"><span class="status-dot" aria-hidden="true"></span><span data-i18n="已连接">已连接</span></span>
+          </div>
+        </header>
+        <div id="content" class="content" aria-live="polite"></div>
+      </main>
+    </div>
+
+    <dialog id="modal" class="modal">
+      <form method="dialog" id="modal-form">
+        <div class="modal-header"><h3 id="modal-title"></h3><button type="button" id="modal-close" class="icon-button" aria-label="关闭" data-i18n-aria-label="关闭">×</button></div>
+        <div id="modal-body" class="modal-body"></div>
+        <p id="modal-error" class="form-error" role="alert"></p>
+        <footer><button type="button" id="modal-cancel" class="secondary" data-i18n="取消">取消</button><button id="modal-submit" value="default" class="primary" data-i18n="确认">确认</button></footer>
+      </form>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>

@@ -1,0 +1,30 @@
+# ================================
+# OCIHelper Python 项目依赖列表
+# ================================
+
+# --- Web 框架 ---
+fastapi>=0.115.0,<1.0
+uvicorn[standard]>=0.30.0,<1.0
+python-multipart>=0.0.9,<1.0
+
+# --- 数据库 ---
+sqlalchemy>=2.0.30,<3.0
+aiosqlite>=0.20.0,<1.0
+greenlet>=3.0.0,<4.0
+
+# --- OCI SDK ---
+oci>=2.184.0,<3.0
+
+# --- Telegram Bot ---
+python-telegram-bot>=21.0,<23.0
+
+# --- 认证与安全 ---
+PyJWT>=2.8.0,<3.0
+cryptography>=42.0.0,<47.0
+
+# --- 工具库 ---
+httpx>=0.27.0,<1.0
+pydantic>=2.7.0,<3.0
+pydantic-settings>=2.2.0,<3.0
+python-dotenv>=1.0.0,<2.0
+loguru>=0.7.0,<1.0

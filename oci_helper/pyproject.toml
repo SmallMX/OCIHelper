@@ -1,0 +1,12 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+exclude = ["dist", ".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["B008", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"main.py" = ["E402"]
+"tests/test_smoke.py" = ["E402"]
