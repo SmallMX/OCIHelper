@@ -36,7 +36,7 @@ OCI_HELPER_WEB_ACCOUNT=admin
 OCI_HELPER_WEB_PASSWORD=replace-with-at-least-12-characters
 ```
 
-`OCI_HELPER_IMAGE_TAG` defaults to `latest`. Set it to a release version such as `0.0.2` when you want a reproducible deployment. The account variables initialize the administrator credentials. After the credentials are changed from the web interface, the values stored in the database take precedence over the environment variables.
+`OCI_HELPER_IMAGE_TAG` defaults to `latest`. Set it to a release version such as `0.0.3` when you want a reproducible deployment. The account variables initialize the administrator credentials. After the credentials are changed from the web interface, the values stored in the database take precedence over the environment variables.
 
 Start the service:
 
@@ -161,7 +161,7 @@ Instance creation and public IP results are written to a SQLite notification out
 Each `vX.Y.Z` Git tag runs the [release workflow](.github/workflows/release.yml). GitHub Actions builds the Docker image for `linux/amd64` and `linux/arm64`, publishes the versioned and `latest` tags to GHCR, records a provenance attestation, and creates the matching [GitHub Release](https://github.com/SmallMX/OCIHelper/releases).
 
 ```bash
-docker pull ghcr.io/smallmx/ocihelper:0.0.2
+docker pull ghcr.io/smallmx/ocihelper:0.0.3
 ```
 
 Published images are listed in the [OCI Helper container package](https://github.com/SmallMX/OCIHelper/pkgs/container/ocihelper).

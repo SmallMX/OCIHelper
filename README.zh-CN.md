@@ -35,7 +35,7 @@ OCI_HELPER_WEB_ACCOUNT=admin
 OCI_HELPER_WEB_PASSWORD=replace-with-at-least-12-characters
 ```
 
-`OCI_HELPER_IMAGE_TAG` 默认为 `latest`；如需可复现部署，可固定为 `0.0.2` 等具体版本。账号变量用于初始化管理员凭据。通过 Web 管理页修改管理员账号后，数据库中的凭据会优先于环境变量。
+`OCI_HELPER_IMAGE_TAG` 默认为 `latest`；如需可复现部署，可固定为 `0.0.3` 等具体版本。账号变量用于初始化管理员凭据。通过 Web 管理页修改管理员账号后，数据库中的凭据会优先于环境变量。
 
 启动服务：
 
@@ -158,7 +158,7 @@ Telegram 用于发送任务通知，以及终止实例、终止引导卷和删�
 每个 `vX.Y.Z` Git 标签都会触发[发布工作流](.github/workflows/release.yml)。GitHub Actions 会为 `linux/amd64` 和 `linux/arm64` 构建 Docker 镜像，将版本标签和 `latest` 推送到 GHCR，记录来源证明，并创建对应的 [GitHub Release](https://github.com/SmallMX/OCIHelper/releases)。
 
 ```bash
-docker pull ghcr.io/smallmx/ocihelper:0.0.2
+docker pull ghcr.io/smallmx/ocihelper:0.0.3
 ```
 
 所有已发布镜像可在 [OCI Helper 容器包](https://github.com/SmallMX/OCIHelper/pkgs/container/ocihelper)中查看。

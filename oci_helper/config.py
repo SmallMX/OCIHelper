@@ -22,7 +22,7 @@ class AppSettings(BaseSettings):
 
     server_host: str = "0.0.0.0"
     server_port: int = Field(default=8888, ge=1, le=65535)
-    app_version: str = "0.0.2"
+    app_version: str = "0.0.3"
 
     web_account: str = Field(default="admin", min_length=1)
     web_password: str = ""
