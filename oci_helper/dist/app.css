@@ -706,6 +706,16 @@ svg {
   gap: 7px;
 }
 
+.pagination {
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+}
+
+.pagination > span {
+  margin-right: auto;
+}
+
 input,
 textarea,
 select {

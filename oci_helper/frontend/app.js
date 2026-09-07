@@ -9,7 +9,20 @@ const state = {
   sshKeys: [],
   selectedUser: null,
   selectedVcn: null,
+  renderVersion: 0,
+  sessionVersion: 0,
 };
+
+class SupersededRequestError extends Error {}
+
+function reportError(error) {
+  if (!(error instanceof SupersededRequestError)) toast(error.message || String(error), true);
+}
+
+function beginRender() {
+  state.renderVersion += 1;
+  closeActiveForm?.();
+}
 
 const titles = {
   overview: "概览",
@@ -84,7 +97,7 @@ function button(text, onClick, kind = "small", loadingText = "") {
     try {
       await onClick();
     } catch (error) {
-      toast(error.message || String(error), true);
+      reportError(error);
     } finally {
       if (loadingText) setButtonLoading(item, false);
       item.disabled = false;
@@ -148,16 +161,25 @@ async function requestApi(path, options = {}) {
   return fetch(`/api${path}`, { ...options, headers, body });
 }
 
-async function readApiPayload(response) {
+async function readApiPayload(response, checkCurrent = () => {}) {
   let payload;
   try {
     payload = await response.json();
   } catch {
+    checkCurrent();
+    if (response.status === 401) {
+      logout();
+      throw new Error(t("登录已过期"));
+    }
     throw new Error(t("服务器返回了无法解析的响应 ({status})", { status: response.status }));
   }
+  checkCurrent();
   if (response.status === 401) {
     logout();
-    throw new Error(t(payload.msg || "登录已过期"));
+    throw new Error(t(payload?.msg || "登录已过期"));
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error(t("服务器返回了无法解析的响应 ({status})", { status: response.status }));
   }
   if (!response.ok || payload.success === false) {
     const detail = Array.isArray(payload.data)
@@ -169,19 +191,36 @@ async function readApiPayload(response) {
 }
 
 async function api(path, options = {}) {
-  const response = await requestApi(path, options);
-  return (await readApiPayload(response)).data;
+  const renderVersion = state.renderVersion;
+  const sessionVersion = state.sessionVersion;
+  const checkCurrent = () => {
+    if (renderVersion !== state.renderVersion || sessionVersion !== state.sessionVersion) {
+      throw new SupersededRequestError();
+    }
+  };
+  const response = await requestApi(path, options).catch((error) => {
+    checkCurrent();
+    throw error;
+  });
+  checkCurrent();
+  return (await readApiPayload(response, checkCurrent)).data;
 }
 
 async function downloadApi(path, options = {}, fallbackFilename = "download") {
+  const sessionVersion = state.sessionVersion;
+  const checkCurrent = () => {
+    if (sessionVersion !== state.sessionVersion) throw new SupersededRequestError();
+  };
   const response = await requestApi(path, options);
+  checkCurrent();
   const contentType = response.headers.get("Content-Type") || "";
   if (!response.ok || contentType.includes("application/json")) {
-    await readApiPayload(response);
+    await readApiPayload(response, checkCurrent);
     throw new Error(t("服务器未返回下载文件"));
   }
 
   const blob = await response.blob();
+  checkCurrent();
   if (!blob.size) throw new Error(t("下载文件为空"));
   const disposition = response.headers.get("Content-Disposition") || "";
   const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
@@ -202,7 +241,14 @@ function setAuthenticated(authenticated) {
 }
 
 function logout() {
+  state.sessionVersion += 1;
+  beginRender();
   state.token = "";
+  state.users = [];
+  state.sshKeys = [];
+  state.selectedUser = null;
+  state.selectedVcn = null;
+  content.replaceChildren();
   sessionStorage.removeItem("oci-helper-token");
   setAuthenticated(false);
 }
@@ -229,6 +275,7 @@ async function navigate(view) {
     if (view === "resources") await renderResources();
     if (view === "settings") await renderSettings();
   } catch (error) {
+    if (error instanceof SupersededRequestError) return;
     content.replaceChildren(node("div", { className: "panel empty", text: t(error.message) }));
     toast(error.message, true);
   }
@@ -250,7 +297,10 @@ function replaceSelectOptions(select, options, emptyLabel = "暂无可用选项"
   }
 }
 
+let closeActiveForm = null;
+
 function openForm(title, fields, submitText = "确认", description = "") {
+  closeActiveForm?.();
   return new Promise((resolve) => {
     let resolved = false;
     $("#modal-title").textContent = t(title);
@@ -288,9 +338,11 @@ function openForm(title, fields, submitText = "确认", description = "") {
         input.addEventListener("change", async () => {
           $("#modal-error").textContent = "";
           try {
-            await field.onChange(input.value, modalForm);
+            await field.onChange(input.value, modalForm, () => !resolved);
           } catch (error) {
-            $("#modal-error").textContent = t(error.message || String(error));
+            if (!resolved && !(error instanceof SupersededRequestError)) {
+              $("#modal-error").textContent = t(error.message || String(error));
+            }
           }
         });
       }
@@ -303,14 +355,17 @@ function openForm(title, fields, submitText = "确认", description = "") {
     const finish = (value) => {
       if (resolved) return;
       resolved = true;
+      closeActiveForm = null;
       modal.close();
       body.replaceChildren();
       resolve(value);
     };
+    closeActiveForm = () => finish(null);
     $("#modal-close").onclick = () => finish(null);
     $("#modal-cancel").onclick = () => finish(null);
     modalForm.onsubmit = (event) => {
       event.preventDefault();
+      if ($("#modal-submit").disabled) return;
       if (!modalForm.reportValidity()) return;
       const data = {};
       const formData = new FormData(modalForm);
@@ -331,9 +386,36 @@ async function confirmAction(title, message, confirmation = "确认") {
 }
 
 async function ensureUsers() {
-  const page = await api("/oci/userPage", { method: "POST", body: { currentPage: 1, pageSize: 100 } });
-  state.users = page.records || [];
+  const users = [];
+  let currentPage = 1;
+  let page;
+  do {
+    page = await loadPage("/oci/userPage", {}, currentPage);
+    users.push(...(page.records || []));
+    currentPage += 1;
+  } while (page.records?.length && currentPage <= Math.ceil(page.total / page.size));
+  state.users = [...new Map(users.map((user) => [user.id, user])).values()];
   return state.users;
+}
+
+async function loadPage(path, body = {}, currentPage = 1) {
+  const page = await api(path, { method: "POST", body: { ...body, currentPage, pageSize: 100 } });
+  const lastPage = Math.max(1, Math.ceil(page.total / page.size));
+  if (currentPage > lastPage) return loadPage(path, body, lastPage);
+  return page;
+}
+
+function pagination(page, onChange) {
+  const pages = Math.max(1, Math.ceil(page.total / page.size));
+  const previous = button("上一页", () => onChange(page.current - 1), "secondary");
+  const next = button("下一页", () => onChange(page.current + 1), "secondary");
+  previous.disabled = page.current <= 1;
+  next.disabled = page.current >= pages;
+  return node("div", { className: "actions pagination" },
+    node("span", { className: "muted", text: t("共 {total} 条 · 第 {current} / {pages} 页", { total: page.total, current: page.current, pages }) }),
+    previous,
+    next,
+  );
 }
 
 async function ensureSshKeys() {
@@ -342,6 +424,7 @@ async function ensureSshKeys() {
 }
 
 async function renderOverview() {
+  beginRender();
   const data = await api("/sys/glance", { method: "GET" });
   setAppVersion(data.currentVersion);
   const cards = node("div", { className: "cards" });
@@ -355,16 +438,17 @@ async function renderOverview() {
   content.replaceChildren(cards, help);
 }
 
-async function renderConfigs() {
-  await ensureUsers();
+async function renderConfigs(currentPage = 1) {
+  beginRender();
+  const page = await loadPage("/oci/userPage", {}, currentPage);
   const actions = actionGroup(
     button("添加配置", addConfig, "primary"),
-    button("刷新", renderConfigs, "secondary"),
+    button("刷新", () => renderConfigs(page.current), "secondary"),
   );
   const root = panel("OCI API 配置", actions);
   root.append(table(
     ["名称", "区域", "创建时间", "状态", "操作"],
-    state.users.map((user) => [
+    (page.records || []).map((user) => [
       user.username || user.id,
       user.regionName || user.region,
       user.createTime,
@@ -377,6 +461,7 @@ async function renderConfigs() {
       ),
     ]),
   ));
+  root.append(pagination(page, renderConfigs));
   content.replaceChildren(root);
 }
 
@@ -414,6 +499,7 @@ async function removeConfig(user) {
 }
 
 async function renderSshKeys() {
+  beginRender();
   const sshKeys = await ensureSshKeys();
   const root = panel("SSH 公钥管理", actionGroup(
     button("生成密钥对", generateSshKeyPair, "primary", "正在生成…"),
@@ -489,13 +575,14 @@ async function generateSshKeyPair() {
     { name: "name", label: "公钥名称", required: true, maxLength: 128 },
   ], "生成并下载", "将生成 Ed25519 密钥对。公钥会自动保存，私钥不会在服务器上留存；下载 ZIP 后请立即备份。");
   if (!data) return;
+  const renderVersion = state.renderVersion;
   await downloadApi(
     "/sshKey/generate",
     { method: "POST", body: { name: data.name } },
     "oci-helper-ssh-key.zip",
   );
   toast("密钥对已生成并开始下载");
-  await renderSshKeys();
+  if (renderVersion === state.renderVersion) await renderSshKeys();
 }
 
 async function createTask(user) {
@@ -583,7 +670,7 @@ async function createTask(user) {
       label: "架构 / Shape",
       type: "select",
       options: architectureOptions,
-      onChange: async (architecture, form) => {
+      onChange: async (architecture, form, isCurrentForm) => {
         activeArchitecture = architecture;
         const imageSelect = form.elements.namedItem("imageSelection");
         const availabilityDomainSelect = form.elements.namedItem("availabilityDomain");
@@ -603,7 +690,7 @@ async function createTask(user) {
               loadAvailabilityDomainOptions(architecture),
             ]);
           } catch (error) {
-            if (activeArchitecture !== architecture) return;
+            if (!isCurrentForm() || activeArchitecture !== architecture) return;
             replaceSelectOptions(imageSelect, [], "镜像加载失败，请重新选择 Shape 重试");
             replaceSelectOptions(
               availabilityDomainSelect,
@@ -612,7 +699,7 @@ async function createTask(user) {
             );
             throw error;
           }
-          if (activeArchitecture !== architecture) return;
+          if (!isCurrentForm() || activeArchitecture !== architecture) return;
           replaceSelectOptions(
             imageSelect,
             asSelectOptions(imageOptions),
@@ -633,7 +720,7 @@ async function createTask(user) {
           }
           ready = true;
         } finally {
-          if (activeArchitecture === architecture && imageSelect.isConnected) {
+          if (isCurrentForm() && activeArchitecture === architecture && imageSelect.isConnected) {
             imageSelect.disabled = false;
             availabilityDomainSelect.disabled = false;
             submit.disabled = !ready;
@@ -731,6 +818,7 @@ async function createTask(user) {
 }
 
 async function renderConfigDetails(user, clean = false) {
+  beginRender();
   state.selectedUser = user;
   content.replaceChildren(node("div", { className: "panel empty", text: t("正在读取 OCI 资源…") }));
   const data = await api("/oci/details", { method: "POST", body: { cfgId: user.id, cleanReLaunchDetails: clean } });
@@ -828,6 +916,7 @@ async function createConsole(user, instance) {
 }
 
 async function showTraffic(user, instance) {
+  beginRender();
   const result = await api("/traffic/data", { method: "POST", body: { ociCfgId: user.id, instanceId: instance.ocId } });
   const rows = (result.labels || []).map((label, index) => [label, result.ingress[index], result.egress[index]]);
   const root = panel(t("最近一小时流量 · {name}", { name: instance.name || instance.ocId }), button("返回实例", () => renderConfigDetails(user), "secondary"));
@@ -848,9 +937,10 @@ async function terminateInstance(user, instance) {
   await renderConfigDetails(user, true);
 }
 
-async function renderTasks() {
-  const page = await api("/oci/createTaskPage", { method: "POST", body: { currentPage: 1, pageSize: 100 } });
-  const root = panel("任务列表", button("刷新", renderTasks, "secondary"));
+async function renderTasks(currentPage = 1) {
+  beginRender();
+  const page = await loadPage("/oci/createTaskPage", {}, currentPage);
+  const root = panel("任务列表", button("刷新", () => renderTasks(page.current), "secondary"));
   root.append(table(
     ["实例名称", "配置", "区域 / 可用域", "规格", "剩余", "尝试", "间隔 / 上限", "状态", "错误", "操作"],
     (page.records || []).map((task) => {
@@ -871,17 +961,19 @@ async function renderTasks() {
       ];
     }),
   ));
+  root.append(pagination(page, renderTasks));
   content.replaceChildren(root);
 }
 
 async function renderTaskLogs(lineCount = 300) {
+  beginRender();
   const data = await api("/sys/taskLogs", { method: "POST", body: { lines: lineCount } });
   const lineSelect = node("select", { attrs: { "aria-label": t("显示日志行数") } });
   for (const count of [100, 300, 500, 1000, 2000]) {
     lineSelect.append(node("option", { text: t("最新 {count} 行", { count }), attrs: { value: count } }));
   }
   lineSelect.value = String(lineCount);
-  lineSelect.addEventListener("change", () => renderTaskLogs(Number(lineSelect.value)));
+  lineSelect.addEventListener("change", () => renderTaskLogs(Number(lineSelect.value)).catch(reportError));
 
   const root = panel("任务执行日志", actionGroup(
     lineSelect,
@@ -919,6 +1011,7 @@ async function stopTask(task) {
 }
 
 async function renderResources() {
+  beginRender();
   await ensureUsers();
   if (!state.users.length) {
     content.replaceChildren(node("div", { className: "panel empty", text: t("请先添加 OCI 配置") }));
@@ -929,7 +1022,10 @@ async function renderResources() {
   const select = node("select");
   for (const user of state.users) select.append(node("option", { text: `${user.username || user.id} · ${user.region}`, attrs: { value: user.id } }));
   select.value = state.selectedUser.id;
-  select.addEventListener("change", () => { state.selectedUser = state.users.find((item) => item.id === select.value); renderResources(); });
+  select.addEventListener("change", () => {
+    state.selectedUser = state.users.find((item) => item.id === select.value);
+    renderResources().catch(reportError);
+  });
   const root = panel("资源配置", select);
   root.append(node("div", { className: "resource-tabs" },
     button("VCN", () => renderVcns(state.selectedUser), "secondary"),
@@ -941,6 +1037,7 @@ async function renderResources() {
 }
 
 async function showTenant(user) {
+  beginRender();
   const data = await api("/tenant/info", { method: "POST", body: { ociCfgId: user.id } });
   const root = panel("租户信息", button("返回", renderResources, "secondary"));
   const facts = node("dl", { className: "facts" });
@@ -951,9 +1048,10 @@ async function showTenant(user) {
   content.replaceChildren(root);
 }
 
-async function renderVcns(user) {
-  const page = await api("/vcn/page", { method: "POST", body: { ociCfgId: user.id, currentPage: 1, pageSize: 100, cleanReLaunch: true } });
-  const root = panel("VCN", actionGroup(button("返回", renderResources, "secondary"), button("刷新", () => renderVcns(user), "secondary")));
+async function renderVcns(user, currentPage = 1, clean = true) {
+  beginRender();
+  const page = await loadPage("/vcn/page", { ociCfgId: user.id, cleanReLaunch: clean }, currentPage);
+  const root = panel("VCN", actionGroup(button("返回", renderResources, "secondary"), button("刷新", () => renderVcns(user, page.current), "secondary")));
   root.append(table(["名称", "状态", "可见性", "创建时间", "操作"], (page.records || []).map((vcn) => [
     vcn.displayName, badge(vcn.status), vcn.visibility, vcn.createTime,
     actionGroup(
@@ -961,6 +1059,7 @@ async function renderVcns(user) {
       button("删除", () => removeVcn(user, vcn), "danger"),
     ),
   ])));
+  root.append(pagination(page, (current) => renderVcns(user, current, false)));
   content.replaceChildren(root);
 }
 
@@ -973,9 +1072,10 @@ async function removeVcn(user, vcn) {
   await renderVcns(user);
 }
 
-async function renderSecurityRules(user, vcn, direction) {
+async function renderSecurityRules(user, vcn, direction, currentPage = 1, clean = true) {
+  beginRender();
   state.selectedVcn = vcn;
-  const page = await api("/securityRule/page", { method: "POST", body: { ociCfgId: user.id, vcnId: vcn.id, type: direction, currentPage: 1, pageSize: 100, cleanReLaunch: true } });
+  const page = await loadPage("/securityRule/page", { ociCfgId: user.id, vcnId: vcn.id, type: direction, cleanReLaunch: clean }, currentPage);
   const root = panel(t("安全规则 · {name}", { name: vcn.displayName }), actionGroup(
     button("返回 VCN", () => renderVcns(user), "secondary"),
     button(direction === 0 ? "查看出站" : "查看入站", () => renderSecurityRules(user, vcn, direction === 0 ? 1 : 0), "secondary"),
@@ -985,6 +1085,7 @@ async function renderSecurityRules(user, vcn, direction) {
     rule.protocol, rule.sourceOrDestination, rule.sourcePort, rule.destinationPort, rule.description || "—",
     button("删除", () => removeSecurityRule(user, vcn, direction, rule.id), "danger"),
   ])));
+  root.append(pagination(page, (current) => renderSecurityRules(user, vcn, direction, current, false)));
   content.replaceChildren(root);
 }
 
@@ -1018,13 +1119,15 @@ async function removeSecurityRule(user, vcn, direction, id) {
   await renderSecurityRules(user, vcn, direction);
 }
 
-async function renderBootVolumes(user) {
-  const page = await api("/bootVolume/page", { method: "POST", body: { ociCfgId: user.id, currentPage: 1, pageSize: 100, cleanReLaunch: true } });
-  const root = panel("引导卷", actionGroup(button("返回", renderResources, "secondary"), button("刷新", () => renderBootVolumes(user), "secondary")));
+async function renderBootVolumes(user, currentPage = 1, clean = true) {
+  beginRender();
+  const page = await loadPage("/bootVolume/page", { ociCfgId: user.id, cleanReLaunch: clean }, currentPage);
+  const root = panel("引导卷", actionGroup(button("返回", renderResources, "secondary"), button("刷新", () => renderBootVolumes(user, page.current), "secondary")));
   root.append(table(["名称", "状态", "容量", "VPU/GB", "挂载", "创建时间", "操作"], (page.records || []).map((volume) => [
     volume.displayName, badge(volume.status), `${volume.sizeInGBs} GB`, volume.vpusPerGB, t(volume.attached ? "是" : "否"), volume.createTime,
     actionGroup(button("调整", () => updateBootVolume(user, volume)), !volume.attached ? button("终止", () => terminateBootVolume(user, volume), "danger") : null),
   ])));
+  root.append(pagination(page, (current) => renderBootVolumes(user, current, false)));
   content.replaceChildren(root);
 }
 
@@ -1061,6 +1164,7 @@ async function requestDestructiveCaptcha(user) {
 }
 
 async function renderLimits(user) {
+  beginRender();
   const services = await api(`/limits/services?ociCfgId=${encodeURIComponent(user.id)}`, { method: "GET" });
   const select = node("select");
   select.append(node("option", { text: t("全部服务"), attrs: { value: "" } }));
@@ -1078,6 +1182,7 @@ async function renderLimits(user) {
 }
 
 async function renderSettings() {
+  beginRender();
   const config = await api("/sys/getSysCfg", { method: "POST", body: {} });
 
   const adminRoot = panel("管理员账号");
@@ -1131,7 +1236,7 @@ async function renderSettings() {
       loginForm.elements.namedItem("account").value = account;
       $("#login-error").textContent = t("管理员账号已更新，请使用新凭据重新登录。");
     } catch (error) {
-      adminError.textContent = t(error.message);
+      if (!(error instanceof SupersededRequestError)) adminError.textContent = t(error.message);
     } finally {
       submit.disabled = false;
     }
@@ -1160,9 +1265,11 @@ async function renderSettings() {
     try {
       const values = new FormData(telegramForm);
       await api("/sys/updateSysCfg", { method: "POST", body: { tgBotToken: values.get("token") || null, tgChatId: values.get("chat") || null } });
-      telegramForm.reset();
+      $("input", tokenLabel).value = "";
+      $("input", tokenLabel).placeholder = t(values.get("token") ? "已配置；修改时请重新输入" : "请输入 Bot Token");
+      $("input", chatLabel).value = values.get("chat") || "";
       toast("Telegram 配置已保存");
-    } catch (error) { toast(error.message, true); }
+    } catch (error) { reportError(error); }
     finally { submit.disabled = false; }
   });
   telegramRoot.append(node("p", { className: "muted", text: t("出于安全考虑，已保存的 Token 不会回传。保存前会调用 Telegram getMe 验证配置；修改时请重新输入 Token 和 Chat ID，清空两个字段可停用通知。") }), telegramForm);
@@ -1180,6 +1287,7 @@ $("#login-form").addEventListener("submit", async (event) => {
     const data = await api("/sys/login", { method: "POST", body: { account: values.get("account"), password: values.get("password") } });
     form.reset();
     state.token = data.token;
+    state.sessionVersion += 1;
     setAppVersion(data.currentVersion);
     sessionStorage.setItem("oci-helper-token", data.token);
     setAuthenticated(true);

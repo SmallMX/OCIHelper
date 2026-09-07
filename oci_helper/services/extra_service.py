@@ -490,7 +490,7 @@ def _parse_rule(rule, rule_id: str, endpoint: str | None) -> dict:
         "sourcePort": None,
         "destinationPort": None,
     }
-    if rule.protocol == "1" and rule.icmp_options:
+    if rule.protocol in {"1", "58"} and rule.icmp_options:
         result["typeAndCode"] = str(rule.icmp_options.type)
         if rule.icmp_options.code is not None:
             result["typeAndCode"] += f", {rule.icmp_options.code}"

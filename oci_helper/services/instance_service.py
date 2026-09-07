@@ -236,6 +236,12 @@ class InstanceService:
             with OracleInstanceFetcher(snapshot["oci_config"], snapshot["username"]) as fetcher:
                 instance = fetcher.get_instance_by_id(snapshot["instance_id"])
                 instance_name = instance.display_name
+                if not any(
+                    attachment.vnic_id == snapshot["vnic_id"]
+                    and attachment.lifecycle_state == "ATTACHED"
+                    for attachment in fetcher.list_vnic_attachments(snapshot["instance_id"])
+                ):
+                    raise ValueError("指定 VNIC 未挂载到目标实例，已停止换 IP")
                 vnic = fetcher.get_vnic(snapshot["vnic_id"])
                 public_ip = fetcher.reassign_ephemeral_public_ip(vnic)
         except Exception as exc:

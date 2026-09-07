@@ -43,6 +43,8 @@ from utils.common import generate_id
 
 _STARTED_AT = datetime.now()
 _LOG_TAIL_MAX_BYTES = 2 * 1024 * 1024
+_ADMIN_CREDENTIALS_LOCK = asyncio.Lock()
+_TELEGRAM_CONFIG_LOCK = asyncio.Lock()
 
 
 class SysService:
@@ -77,69 +79,71 @@ class SysService:
     async def update_admin_credentials(
         params: UpdateAdminCredentialsParams, db: AsyncSession
     ) -> None:
-        credentials = await load_admin_credentials(db)
-        password_ok = await asyncio.to_thread(
-            verify_admin_password, params.current_password, credentials
-        )
-        if not password_ok:
-            raise OciException(-1, "当前密码不正确")
-        if params.account == credentials.account and params.new_password is None:
-            raise OciException(-1, "管理员用户名或密码未发生变化")
+        async with _ADMIN_CREDENTIALS_LOCK:
+            credentials = await load_admin_credentials(db)
+            password_ok = await asyncio.to_thread(
+                verify_admin_password, params.current_password, credentials
+            )
+            if not password_ok:
+                raise OciException(-1, "当前密码不正确")
+            if params.account == credentials.account and params.new_password is None:
+                raise OciException(-1, "管理员用户名或密码未发生变化")
 
-        if params.new_password is not None:
+            if params.new_password is not None:
+                try:
+                    validate_admin_password(params.new_password)
+                except ValueError as exc:
+                    raise OciException(-1, str(exc)) from exc
+                password_hash = await asyncio.to_thread(hash_admin_password, params.new_password)
+            elif credentials.password_hash is not None:
+                password_hash = credentials.password_hash
+            else:
+                password_hash = await asyncio.to_thread(hash_admin_password, settings.web_password)
+
             try:
-                validate_admin_password(params.new_password)
-            except ValueError as exc:
-                raise OciException(-1, str(exc)) from exc
-            password_hash = await asyncio.to_thread(hash_admin_password, params.new_password)
-        elif credentials.password_hash is not None:
-            password_hash = credentials.password_hash
-        else:
-            password_hash = await asyncio.to_thread(hash_admin_password, settings.web_password)
+                await SysService._set_cfg_value(db, ADMIN_ACCOUNT_CODE, params.account)
+                await SysService._set_cfg_value(db, ADMIN_PASSWORD_HASH_CODE, password_hash)
+                await SysService._set_cfg_value(db, ADMIN_AUTH_VERSION_CODE, create_auth_version())
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                raise
 
-        try:
-            await SysService._set_cfg_value(db, ADMIN_ACCOUNT_CODE, params.account)
-            await SysService._set_cfg_value(db, ADMIN_PASSWORD_HASH_CODE, password_hash)
-            await SysService._set_cfg_value(db, ADMIN_AUTH_VERSION_CODE, create_auth_version())
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            raise
-
-        logger.info(
-            "管理员凭据已更新: account_changed={}, password_changed={}",
-            params.account != credentials.account,
-            params.new_password is not None,
-        )
+            logger.info(
+                "管理员凭据已更新: account_changed={}, password_changed={}",
+                params.account != credentials.account,
+                params.new_password is not None,
+            )
 
     @staticmethod
     async def update_sys_cfg(params: UpdateSysCfgParams, db: AsyncSession) -> None:
         from services.notification_service import requeue_waiting_notifications
         from telegram_bot import init_telegram_bot, shutdown_telegram_bot
 
-        old_token = await SysService._get_cfg_value(db, "SYS_TG_BOT_TOKEN")
-        old_chat_id = await SysService._get_cfg_value(db, "SYS_TG_CHAT_ID")
-        if params.tg_bot_token and params.tg_chat_id:
-            notifier = await init_telegram_bot(params.tg_bot_token, params.tg_chat_id)
-            if notifier is None:
-                raise OciException(-1, "Telegram Bot 配置验证失败，原配置未更改")
-
-        try:
-            await SysService._set_cfg_value(db, "SYS_TG_BOT_TOKEN", params.tg_bot_token or "")
-            await SysService._set_cfg_value(db, "SYS_TG_CHAT_ID", params.tg_chat_id or "")
+        async with _TELEGRAM_CONFIG_LOCK:
+            old_token = await SysService._get_cfg_value(db, "SYS_TG_BOT_TOKEN")
+            old_chat_id = await SysService._get_cfg_value(db, "SYS_TG_CHAT_ID")
             if params.tg_bot_token and params.tg_chat_id:
-                await requeue_waiting_notifications(db)
-            await db.commit()
-        except Exception:
-            await db.rollback()
-            if old_token and old_chat_id:
-                await init_telegram_bot(old_token, old_chat_id)
-            else:
-                await shutdown_telegram_bot()
-            raise
+                notifier = await init_telegram_bot(params.tg_bot_token, params.tg_chat_id)
+                if notifier is None:
+                    raise OciException(-1, "Telegram Bot 配置验证失败，原配置未更改")
 
-        if not params.tg_bot_token:
-            await shutdown_telegram_bot()
+            try:
+                await SysService._set_cfg_value(db, "SYS_TG_BOT_TOKEN", params.tg_bot_token or "")
+                await SysService._set_cfg_value(db, "SYS_TG_CHAT_ID", params.tg_chat_id or "")
+                if params.tg_bot_token and params.tg_chat_id:
+                    await requeue_waiting_notifications(db)
+                await db.commit()
+            except Exception:
+                await db.rollback()
+                if old_token and old_chat_id:
+                    await init_telegram_bot(old_token, old_chat_id)
+                else:
+                    await shutdown_telegram_bot()
+                raise
+
+            if not params.tg_bot_token:
+                await shutdown_telegram_bot()
 
     @staticmethod
     async def glance(db: AsyncSession) -> GetGlanceRsp:

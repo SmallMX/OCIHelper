@@ -23,11 +23,11 @@ services:
       - oci-helper-keys:/app/keys
       - oci-helper-logs:/app/logs
     environment:
-      # ---- 必填项 ----
-      # Web 管理面板登录账号
+      # ---- 初始管理员凭据 ----
+      # 通过管理页保存管理员凭据后，以数据库中的值为准。
       - OCI_HELPER_WEB_ACCOUNT=${OCI_HELPER_WEB_ACCOUNT:-admin}
-      # Web 管理面板登录密码
-      - OCI_HELPER_WEB_PASSWORD=${OCI_HELPER_WEB_PASSWORD:?set OCI_HELPER_WEB_PASSWORD in .env}
+      # 首次启动必须设置强密码；已有持久化凭据时可留空，由应用校验。
+      - OCI_HELPER_WEB_PASSWORD=${OCI_HELPER_WEB_PASSWORD:-}
       # ---- 可选项 ----
       # 服务监听端口
       - OCI_HELPER_SERVER_PORT=8888

@@ -1358,7 +1358,7 @@ class OracleInstanceFetcher:
         return None
 
     def delete_public_ip_by_private_ip(self, private_ip_id: str) -> None:
-        """通过私有 IP 删除关联的公网 IP"""
+        """通过私有 IP 删除关联的临时公网 IP，保留固定地址。"""
         try:
             response = self.vn_client.get_public_ip_by_private_ip_id(
                 get_public_ip_by_private_ip_id_details=(
@@ -1372,6 +1372,8 @@ class OracleInstanceFetcher:
                 return
             raise
         if response.data:
+            if getattr(response.data, "lifetime", None) != "EPHEMERAL":
+                raise ValueError("当前公网 IP 不是临时地址，已停止换 IP 以保护保留地址")
             self.vn_client.delete_public_ip(
                 public_ip_id=response.data.id,
                 if_match=response.headers.get("etag"),
@@ -1450,6 +1452,8 @@ class OracleInstanceFetcher:
                     new_ip = reconciled
                     break
         if new_ip is None:
+            if last_error is not None:
+                raise last_error
             raise RuntimeError("创建新公网 IP 失败") from last_error
         logger.info(f"换 IP 成功: VNIC={vnic.id}, 新IP={new_ip}")
         return new_ip

@@ -119,14 +119,18 @@ class AppSettings(BaseSettings):
             stream.write(value)
         return value
 
-    def validate_runtime(self) -> None:
-        if len(self.web_password) < 12 or self.web_password.lower() in {
-            "admin",
-            "password",
-            "change-me",
-            "your_strong_password_here",
-            "replace-with-at-least-12-characters",
-        }:
+    def validate_runtime(self, *, require_bootstrap_credentials: bool = True) -> None:
+        if require_bootstrap_credentials and (
+            len(self.web_password) < 12
+            or self.web_password.lower()
+            in {
+                "admin",
+                "password",
+                "change-me",
+                "your_strong_password_here",
+                "replace-with-at-least-12-characters",
+            }
+        ):
             raise RuntimeError(
                 "OCI_HELPER_WEB_PASSWORD must be at least 12 characters and must not use a default password"
             )

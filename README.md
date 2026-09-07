@@ -146,7 +146,7 @@ The fixed `VM.Standard.E2.1.Micro` shape always uses the configuration defined b
 
 Open **系统设置 (System Settings)** to change the administrator username or password. The current password is required before saving. You may leave the new password empty when changing only the username; a new password must contain at least 12 characters.
 
-Passwords are stored in SQLite as strong PBKDF2-SHA256 hashes and are never stored or returned in plaintext. After a successful change, all existing login tokens are immediately invalidated and the management panel requires the new credentials. `OCI_HELPER_WEB_ACCOUNT` and `OCI_HELPER_WEB_PASSWORD` then remain fallback values used only when the database does not contain administrator credentials.
+Passwords are stored in SQLite as strong PBKDF2-SHA256 hashes and are never stored or returned in plaintext. After a successful change, all existing login tokens are immediately invalidated and the management panel requires the new credentials. `OCI_HELPER_WEB_ACCOUNT` and `OCI_HELPER_WEB_PASSWORD` then remain fallback values used only when the database does not contain administrator credentials. Once credentials have been saved through the management panel, you can remove the bootstrap password from `.env`; a fresh database still requires a strong bootstrap password to start.
 
 ## Telegram
 

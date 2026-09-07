@@ -78,14 +78,14 @@ fingerprint=<your-api-key-fingerprint>
 
 “系统设置”中的管理员账号表单支持修改用户名，以及单独或同时修改密码。操作必须验证当前密码，新密码至少 12 个字符。密码以带随机盐的 PBKDF2-SHA256 哈希存入 SQLite，不会保存明文。
 
-保存后凭据版本会轮换，所有已签发 JWT 立即失效，管理页会要求使用新凭据重新登录。数据库已有管理员凭据时，`OCI_HELPER_WEB_ACCOUNT` 和 `OCI_HELPER_WEB_PASSWORD` 不再覆盖它们。
+保存后凭据版本会轮换，所有已签发 JWT 立即失效，管理页会要求使用新凭据重新登录。数据库已有管理员凭据时，`OCI_HELPER_WEB_ACCOUNT` 和 `OCI_HELPER_WEB_PASSWORD` 不再覆盖它们，此时可以从 `.env` 中移除初始密码；使用全新数据库启动时仍须设置强密码。
 
 ## 关键配置
 
 | 变量 | 默认值 | 说明 |
 |---|---:|---|
 | `OCI_HELPER_WEB_ACCOUNT` | `admin` | 初始管理账号；数据库已有管理员凭据时仅作为回退值 |
-| `OCI_HELPER_WEB_PASSWORD` | 无 | 初始管理密码，至少 12 位且不能使用常见默认值 |
+| `OCI_HELPER_WEB_PASSWORD` | 无 | 首次启动必填，至少 12 位且不能使用常见默认值；管理页保存凭据后可移除 |
 | `OCI_HELPER_BIND_ADDRESS` | `127.0.0.1` | Docker Compose 的宿主机绑定地址；公网部署保持回环地址并使用 HTTPS 反代 |
 | `OCI_HELPER_JWT_SECRET` | 自动生成 | 手工设置时至少 32 位 |
 | `OCI_HELPER_DATA_ENCRYPTION_KEY` | 自动生成 | Telegram Token 的加密密钥，手工设置时至少 32 位 |
@@ -159,6 +159,12 @@ python frontend/build.py
 
 ```bash
 python -m unittest discover -s tests -v
+```
+
+前端回归测试使用 Node.js 内置测试运行器，无需安装 npm 依赖，覆盖页面请求竞态、弹窗生命周期、分页和通知表单状态：
+
+```bash
+node --test frontend/tests/app.test.cjs
 ```
 
 可选静态检查：

@@ -9,9 +9,10 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from loguru import logger
-from sqlalchemy import or_, select, update
+from sqlalchemy import and_, or_, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql.elements import ColumnElement
 
 from core.secrets import decrypt_secret
 from database import async_session
@@ -26,8 +27,30 @@ NOTIFICATION_UNCONFIGURED_DELAY_SECONDS = 60
 NOTIFICATION_RETRY_BASE_SECONDS = 5
 NOTIFICATION_RETRY_MAX_SECONDS = 3600
 NOTIFICATION_MAX_ATTEMPTS = 20
+NOTIFICATION_DELIVERY_TIMEOUT_SECONDS = 60
+NOTIFICATION_LEASE_SECONDS = 120
 
 NotificationSender = Callable[[str], Awaitable[bool]]
+
+
+def _notification_due(now: datetime) -> ColumnElement[bool]:
+    return and_(
+        NotificationOutbox.status.in_(("pending", "sending")),
+        or_(
+            NotificationOutbox.next_attempt_at.is_(None),
+            NotificationOutbox.next_attempt_at <= now,
+        ),
+    )
+
+
+def _notification_lease(
+    notification_id: str, lease_expires_at: datetime
+) -> ColumnElement[bool]:
+    return and_(
+        NotificationOutbox.id == notification_id,
+        NotificationOutbox.status == "sending",
+        NotificationOutbox.next_attempt_at == lease_expires_at,
+    )
 
 
 def notification_retry_delay(attempts: int) -> int:
@@ -95,13 +118,7 @@ async def dispatch_due_notifications(
     async with session_factory() as db:
         result = await db.execute(
             select(NotificationOutbox.id)
-            .where(
-                NotificationOutbox.status == "pending",
-                or_(
-                    NotificationOutbox.next_attempt_at.is_(None),
-                    NotificationOutbox.next_attempt_at <= now,
-                ),
-            )
+            .where(_notification_due(now))
             .order_by(NotificationOutbox.created_at, NotificationOutbox.id)
             .limit(NOTIFICATION_BATCH_SIZE)
         )
@@ -127,24 +144,31 @@ async def _deliver_notification(
     uses_global_bot: bool,
 ) -> None:
     now = datetime.now()
+    lease_expires_at = now + timedelta(seconds=NOTIFICATION_LEASE_SECONDS)
     async with session_factory() as db:
+        claimed = await db.execute(
+            update(NotificationOutbox)
+            .where(NotificationOutbox.id == notification_id, _notification_due(now))
+            .values(status="sending", next_attempt_at=lease_expires_at, updated_at=now)
+        )
+        if claimed.rowcount != 1:
+            return
         notification = await db.get(NotificationOutbox, notification_id)
-        if notification is None or notification.status != "pending":
-            return
-        if notification.next_attempt_at is not None and notification.next_attempt_at > now:
-            return
         message = notification.message
-
-    if uses_global_bot and get_bot() is None:
-        if not await _try_restore_global_bot(session_factory):
-            await _defer_unavailable_notification(notification_id, session_factory)
-            return
+        await db.commit()
 
     send_error: str | None = None
     try:
-        sent = await sender(message)
-        if not sent:
-            send_error = "Telegram send returned false"
+        async with asyncio.timeout(NOTIFICATION_DELIVERY_TIMEOUT_SECONDS):
+            if uses_global_bot and get_bot() is None:
+                if not await _try_restore_global_bot(session_factory):
+                    await _defer_unavailable_notification(
+                        notification_id, lease_expires_at, session_factory
+                    )
+                    return
+            sent = await sender(message)
+            if not sent:
+                send_error = "Telegram send returned false"
     except Exception as exc:
         sent = False
         send_error = f"Telegram sender raised {type(exc).__name__}"
@@ -156,44 +180,62 @@ async def _deliver_notification(
 
     completed_at = datetime.now()
     async with session_factory() as db:
-        notification = await db.get(NotificationOutbox, notification_id)
-        if notification is None or notification.status != "pending":
+        notification = (
+            await db.execute(
+                select(NotificationOutbox).where(
+                    _notification_lease(notification_id, lease_expires_at)
+                )
+            )
+        ).scalar_one_or_none()
+        if notification is None:
             return
-        notification.attempts += 1
-        notification.updated_at = completed_at
+        attempts = notification.attempts + 1
+        values = {
+            "attempts": attempts,
+            "updated_at": completed_at,
+            "last_error": send_error,
+            "next_attempt_at": None,
+        }
         if sent:
-            notification.status = "sent"
-            notification.last_error = None
-            notification.next_attempt_at = None
-            notification.sent_at = completed_at
+            values.update(status="sent", last_error=None, sent_at=completed_at)
+        elif attempts >= NOTIFICATION_MAX_ATTEMPTS:
+            values["status"] = "failed"
+        else:
+            delay = notification_retry_delay(attempts)
+            values.update(
+                status="pending",
+                next_attempt_at=completed_at + timedelta(seconds=delay),
+            )
+        completed = await db.execute(
+            update(NotificationOutbox)
+            .where(_notification_lease(notification_id, lease_expires_at))
+            .values(**values)
+        )
+        await db.commit()
+        if completed.rowcount != 1:
+            return
+        if sent:
             logger.info(
                 "通知投递成功: notification={}, category={}, attempts={}",
                 notification.id,
                 notification.category,
-                notification.attempts,
+                attempts,
             )
-        elif notification.attempts >= NOTIFICATION_MAX_ATTEMPTS:
-            notification.status = "failed"
-            notification.last_error = send_error
-            notification.next_attempt_at = None
+        elif attempts >= NOTIFICATION_MAX_ATTEMPTS:
             logger.error(
                 "通知达到最大重试次数: notification={}, category={}, attempts={}",
                 notification.id,
                 notification.category,
-                notification.attempts,
+                attempts,
             )
         else:
-            delay = notification_retry_delay(notification.attempts)
-            notification.last_error = send_error
-            notification.next_attempt_at = completed_at + timedelta(seconds=delay)
             logger.warning(
                 "通知投递失败，稍后重试: notification={}, category={}, attempts={}, delay={}s",
                 notification.id,
                 notification.category,
-                notification.attempts,
+                attempts,
                 delay,
             )
-        await db.commit()
 
 
 async def _try_restore_global_bot(session_factory: Any) -> bool:
@@ -219,17 +261,23 @@ async def _try_restore_global_bot(session_factory: Any) -> bool:
         return False
 
 
-async def _defer_unavailable_notification(notification_id: str, session_factory: Any) -> None:
+async def _defer_unavailable_notification(
+    notification_id: str, lease_expires_at: datetime, session_factory: Any
+) -> None:
     now = datetime.now()
     async with session_factory() as db:
-        notification = await db.get(NotificationOutbox, notification_id)
-        if notification is None or notification.status != "pending":
-            return
-        notification.last_error = "Telegram Bot is not configured or unavailable"
-        notification.next_attempt_at = now + timedelta(
-            seconds=NOTIFICATION_UNCONFIGURED_DELAY_SECONDS
+        await db.execute(
+            update(NotificationOutbox)
+            .where(_notification_lease(notification_id, lease_expires_at))
+            .values(
+                status="pending",
+                last_error="Telegram Bot is not configured or unavailable",
+                next_attempt_at=now + timedelta(
+                    seconds=NOTIFICATION_UNCONFIGURED_DELAY_SECONDS
+                ),
+                updated_at=now,
+            )
         )
-        notification.updated_at = now
         await db.commit()
 
 

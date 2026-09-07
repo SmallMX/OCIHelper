@@ -47,6 +47,12 @@ class IcmpOptions(ApiModel):
     type: int | None = Field(default=None, ge=0, le=255)
     code: int | None = Field(default=None, ge=0, le=255)
 
+    @model_validator(mode="after")
+    def validate_type_and_code(self):
+        if self.code is not None and self.type is None:
+            raise ValueError("ICMP code requires an ICMP type")
+        return self
+
 
 class SecurityRuleInput(ApiModel):
     is_stateless: bool = Field(default=False, alias="isStateless")

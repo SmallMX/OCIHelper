@@ -9,7 +9,7 @@ from __future__ import annotations
 import threading
 import time
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import CancelledError, Future, ThreadPoolExecutor
 from dataclasses import dataclass
 
 from loguru import logger
@@ -47,6 +47,7 @@ class TaskScheduler:
         self._create_tasks: dict[str, TaskInfo] = {}
         self._change_ip_tasks: dict[str, TaskInfo] = {}
         self._functions: dict[tuple[str, str], Callable[[], object]] = {}
+        self._futures: set[Future] = set()
         self._lock = threading.RLock()
         self._condition = threading.Condition(self._lock)
         self._running = False
@@ -64,6 +65,7 @@ class TaskScheduler:
             self._running = True
             self._dispatcher = threading.Thread(
                 target=self._dispatch_loop,
+                args=(self._executor,),
                 name="oci-task-dispatcher",
                 daemon=True,
             )
@@ -204,12 +206,16 @@ class TaskScheduler:
     def _registry(self, category: str) -> dict[str, TaskInfo]:
         return self._create_tasks if category == "create" else self._change_ip_tasks
 
-    def _dispatch_loop(self) -> None:
+    def _dispatch_loop(self, executor: ThreadPoolExecutor) -> None:
         while True:
             due: list[tuple[str, str, TaskInfo, Callable[[], object]]] = []
             with self._condition:
-                if not self._running:
+                if not self._running or self._executor is not executor:
                     return
+                available_workers = self._worker_count - len(self._futures)
+                if available_workers <= 0:
+                    self._condition.wait(timeout=1.0)
+                    continue
                 now = time.monotonic()
                 next_deadline: float | None = None
                 for category, registry in (
@@ -222,8 +228,6 @@ class TaskScheduler:
                         if task.next_run <= now:
                             func = self._functions.get((category, task_key))
                             if func is not None:
-                                task.running = True
-                                task.execution_count += 1
                                 due.append((category, task_key, task, func))
                         else:
                             next_deadline = (
@@ -239,23 +243,41 @@ class TaskScheduler:
                     self._condition.wait(timeout=timeout)
                     continue
 
-            for category, task_key, task, func in due:
-                try:
-                    executor = self._executor
-                    if executor is None:
-                        return
-                    future = executor.submit(func)
-                except RuntimeError:
-                    with self._condition:
+                # Keep waiting work in the timer registry, not the executor's unbounded queue.
+                due.sort(key=lambda entry: entry[2].next_run)
+                for category, task_key, task, func in due[:available_workers]:
+                    task.running = True
+                    try:
+                        future = executor.submit(self._execute, category, task_key, task, func)
+                    except RuntimeError:
                         task.running = False
                         if not self._running:
                             task.stopped = True
-                    return
-                future.add_done_callback(
-                    lambda completed, c=category, k=task_key, t=task: self._complete(
-                        c, k, t, completed
+                        return
+                    self._futures.add(future)
+                    future.add_done_callback(
+                        lambda completed, c=category, k=task_key, t=task: self._complete(
+                            c, k, t, completed
+                        )
                     )
-                )
+
+    def _execute(
+        self,
+        category: str,
+        task_key: str,
+        task: TaskInfo,
+        func: Callable[[], object],
+    ) -> object:
+        with self._condition:
+            if (
+                not self._running
+                or self._registry(category).get(task_key) is not task
+                or task.stopped
+                or task.paused
+            ):
+                return TaskExecutionResult()
+            task.execution_count += 1
+        return func()
 
     def _complete(self, category: str, task_key: str, task: TaskInfo, future: Future) -> None:
         result = TaskExecutionResult()
@@ -265,11 +287,15 @@ class TaskScheduler:
                 result = returned
             elif returned is True:
                 result = TaskExecutionResult(done=True)
+        except CancelledError:
+            pass
         except Exception:
             logger.exception("任务执行异常: {}", task_key)
 
         registry = self._registry(category)
         with self._condition:
+            self._futures.discard(future)
+            self._condition.notify_all()
             if registry.get(task_key) is not task:
                 return
             task.running = False

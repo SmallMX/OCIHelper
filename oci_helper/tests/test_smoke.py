@@ -54,6 +54,7 @@ from database import _apply_migrations
 from main import app
 from models.base import Base
 from models.notification_outbox import NotificationOutbox
+from models.oci_change_ip_task import OciChangeIpTask
 from models.oci_create_task import OciCreateTask
 from models.oci_user import OciUser
 from schemas.instance_schemas import (
@@ -72,7 +73,7 @@ from schemas.other_schemas import (
     VcnPageParams,
 )
 from schemas.response import ResponseData
-from services.extra_service import _protocol_options
+from services.extra_service import _parse_ingress_rule, _protocol_options
 from services.instance_service import (
     InstanceService,
     _build_create_success_message,
@@ -1238,6 +1239,55 @@ class ApplicationSmokeTests(unittest.TestCase):
             [],
         )
 
+    def test_ip_rotation_preserves_reserved_addresses_and_transient_errors(self) -> None:
+        fetcher = OracleInstanceFetcher.__new__(OracleInstanceFetcher)
+        fetcher.vn_client = MagicMock()
+        fetcher.get_private_ip_id = MagicMock(return_value="private-ip")
+        fetcher._wait_until_deleted = MagicMock()
+        fetcher.create_public_ip = MagicMock()
+        public_ip = oci.core.models.PublicIp(
+            id="public-ip", lifetime="RESERVED", ip_address="203.0.113.1"
+        )
+        fetcher.vn_client.get_public_ip_by_private_ip_id.return_value = SimpleNamespace(
+            data=public_ip, headers={"etag": "ip-etag"}
+        )
+        with self.assertRaisesRegex(ValueError, "保留地址"):
+            fetcher.reassign_ephemeral_public_ip(SimpleNamespace(id="vnic"))
+        fetcher.vn_client.delete_public_ip.assert_not_called()
+        fetcher.create_public_ip.assert_not_called()
+
+        public_ip.lifetime = "EPHEMERAL"
+        fetcher.delete_public_ip_by_private_ip("private-ip")
+        fetcher.vn_client.delete_public_ip.assert_called_once_with(
+            public_ip_id="public-ip", if_match="ip-etag"
+        )
+
+        timeout = TimeoutError("OCI create timed out")
+        fetcher.create_public_ip.side_effect = timeout
+        fetcher._get_public_ip_address = MagicMock(return_value=None)
+        with (
+            patch("core.oracle_fetcher.time.sleep"),
+            self.assertRaises(TimeoutError) as raised,
+        ):
+            fetcher.reassign_ephemeral_public_ip(SimpleNamespace(id="vnic"))
+        self.assertIs(raised.exception, timeout)
+        self.assertTrue(is_retryable_oci_error(raised.exception))
+        self.assertEqual(fetcher.create_public_ip.call_count, 3)
+        self.assertEqual(
+            len({call.args[1] for call in fetcher.create_public_ip.call_args_list}), 1
+        )
+
+    def test_icmp_rules_require_type_and_display_ipv6_options(self) -> None:
+        with self.assertRaisesRegex(ValueError, "ICMP code requires"):
+            IcmpOptions(code=0)
+        self.assertEqual(IcmpOptions(type=0, code=0).type, 0)
+        rule = oci.core.models.IngressSecurityRule(
+            protocol="58",
+            source="::/0",
+            icmp_options=oci.core.models.IcmpOptions(type=2, code=0),
+        )
+        self.assertEqual(_parse_ingress_rule(rule, "rule-id")["typeAndCode"], "2, 0")
+
     def test_ipv6_boot_volume_shape_traffic_and_ip_contracts(self) -> None:
         fetcher = OracleInstanceFetcher.__new__(OracleInstanceFetcher)
         fetcher.vn_client = SimpleNamespace(list_subnets=MagicMock())
@@ -1546,6 +1596,39 @@ class NotificationDeliveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(sender.await_count, 2)
         self.assertEqual(notification_retry_delay(1), 5)
         self.assertEqual(notification_retry_delay(100), 3600)
+
+    async def test_change_ip_rejects_foreign_vnic_before_mutating_resources(self) -> None:
+        async with self.sessions() as db:
+            db.add(OciUser(
+                id="user-1", username="example-user", oci_tenant_id="tenancy",
+                oci_user_id="oci-user", oci_fingerprint="fingerprint",
+                oci_region="ap-tokyo-1", oci_key_path="/tmp/test-key.pem",
+            ))
+            db.add(OciChangeIpTask(
+                id="ip-task", user_id="user-1", instance_id="instance-1",
+                vnic_id="foreign-vnic", max_attempts=5,
+            ))
+            await db.commit()
+
+        fetcher_context = MagicMock()
+        fetcher = fetcher_context.__enter__.return_value
+        fetcher.get_instance_by_id.return_value = SimpleNamespace(display_name="instance-1")
+        fetcher.list_vnic_attachments.return_value = [
+            SimpleNamespace(vnic_id="own-vnic", lifecycle_state="ATTACHED"),
+            SimpleNamespace(vnic_id="foreign-vnic", lifecycle_state="DETACHED"),
+        ]
+        with (
+            patch("services.instance_service.async_session", self.sessions),
+            patch("services.instance_service.OracleInstanceFetcher", return_value=fetcher_context),
+        ):
+            result = await InstanceService.execute_change_ip_task("ip-task")
+        self.assertTrue(result.done)
+        fetcher.get_vnic.assert_not_called()
+        fetcher.reassign_ephemeral_public_ip.assert_not_called()
+        async with self.sessions() as db:
+            task = await db.get(OciChangeIpTask, "ip-task")
+            self.assertEqual(task.status, "failed")
+            self.assertIn("VNIC", task.last_error)
 
     async def test_task_creation_enqueues_summary_notification(self) -> None:
         async with self.sessions() as db:

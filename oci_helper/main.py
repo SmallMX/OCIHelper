@@ -147,11 +147,19 @@ async def lifespan(app: FastAPI):
     logger.info(f"  密钥目录: {settings.key_dir_path}")
     logger.info("=" * 60)
 
-    settings.validate_runtime()
+    settings.validate_runtime(require_bootstrap_credentials=False)
 
     # 初始化数据库
     await init_db()
     logger.info("✅ 数据库初始化完成")
+
+    from core.admin_credentials import load_admin_credentials
+    from database import async_session
+
+    async with async_session() as db:
+        credentials = await load_admin_credentials(db)
+    if not credentials.is_persisted:
+        settings.validate_runtime()
 
     from core.task_scheduler import scheduler
 
@@ -162,7 +170,6 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import select
 
         from core.secrets import decrypt_secret
-        from database import async_session
         from models.oci_kv import OciKv
         from telegram_bot import init_telegram_bot
 
